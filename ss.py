@@ -7,10 +7,10 @@ import sys
 import types
 import email.parser
 
-from urlparse import urlparse
-from urlparse import parse_qs
-from BaseHTTPServer import BaseHTTPRequestHandler
-from BaseHTTPServer import HTTPServer
+from urllib.parse import urlparse
+from urllib.parse import parse_qs
+from http.server import BaseHTTPRequestHandler
+from http.server import HTTPServer
 
 
 port = 8000
@@ -66,7 +66,7 @@ class DefaultReposnse(object):
         return self.status
 
     def get_content(self):
-        return self.content
+        return bytes(self.content, "utf8")
 
     def get_headers(self):
         return self.headers
@@ -90,7 +90,7 @@ class ResponseBuilder(object):
         if not root_path:
             self.root_path = None
         elif not path.exists(root_path):
-            print "\nResponseBuilder: Root path does not exist. I will use default response everywhere.\n"
+            print("\nResponseBuilder: Root path does not exist. I will use default response everywhere.\n")
             self.root_path = None
         else:
             self.root_path = path.abspath(root_path)
@@ -108,9 +108,9 @@ class ResponseBuilder(object):
                 f.close()
                 return c
             except Exception as e:
-                print "Can't read '%s'" % filename
-                print e
-                print "\n"
+                print("Can't read '%s'" % filename)
+                print(e)
+                print("\n")
         return None
 
     def _get_headers(self, filename):
@@ -120,11 +120,11 @@ class ResponseBuilder(object):
                 strip = lambda s: s if len(s)==0 else s[0]+s[1:].strip()
                 headers_raw = "\r\n".join(map(strip, f.readlines()[1:]))
                 f.close()
-                return email.parser.Parser().parsestr(headers_raw).items()
+                return list(email.parser.Parser().parsestr(headers_raw).items())
             except Exception as e:
-                print "Can't parse headers from '%s'" % filename
-                print e
-                print "\n"
+                print("Can't parse headers from '%s'" % filename)
+                print(e)
+                print("\n")
         return None
 
     def _get_status(self, filename):
@@ -135,9 +135,9 @@ class ResponseBuilder(object):
                 f.close()
                 return int(l)
             except Exception as e:
-                print "Can't get status from '%s'" % filename
-                print e
-                print "\n"
+                print("Can't get status from '%s'" % filename)
+                print(e)
+                print("\n")
         return None
 
     def get_response(self, p, method):
@@ -156,9 +156,9 @@ class ResponseBuilder(object):
             status = self._get_status(content_filename + "_H")
             return Response(content=content, status=status, headers=headers)
         except Exception as e:
-            print "\nResponseBuilder: oh, i got some error:"
-            print e
-            print "Using default response.\n"
+            print("\nResponseBuilder: oh, i got some error:")
+            print(e)
+            print("Using default response.\n")
             return Response()
 
 
@@ -168,14 +168,14 @@ class SillyMetaclass(type):
 
         def get_wrapper(name, f):
             def wrapper(self, *args, **kwargs):
-                print "-"*80
+                print("-"*80)
                 path = self._get_path()
                 method = self.command
                 resp = self.response_builder.get_response(path, method)
                 self._send_response(resp)
                 self._log_get_params()
                 f(self, *args, **kwargs)
-                print "-"*80
+                print("-"*80)
             return wrapper
 
         for k in attrs:
@@ -191,9 +191,7 @@ class SillyMetaclass(type):
         super(SillyMetaclass, cls).__call__(*args, **kwargs)        
 
 
-class SillyHandler(BaseHTTPRequestHandler):
-
-    __metaclass__ = SillyMetaclass
+class SillyHandler(BaseHTTPRequestHandler, metaclass=SillyMetaclass):
 
     def __init__(self, *args, **kwargs):
         self.response_builder = ResponseBuilder(kwargs.pop("root_path", None))
@@ -217,27 +215,27 @@ class SillyHandler(BaseHTTPRequestHandler):
     def _log_get_params(self):
         q = self._get_query()
         if q:
-            print "\nGot some GET params here:"
+            print("\nGot some GET params here:")
             for k in q:
-                print "%s: %s" % (k, q[k])
+                print("%s: %s" % (k, q[k]))
 
     def _log_payload(self):
-        ctype = self.headers.getheader('content-type')
+        ctype = self.headers.get('content-type', "")
         if not ctype:
-            print "\nPayload: no content-type here, skip the body"
+            print("\nPayload: no content-type here, skip the body")
             return
         ctype, pdict = cgi.parse_header(ctype)
         if ctype == 'multipart/form-data':
             postvars = cgi.parse_multipart(self.rfile, pdict)
         elif ctype == 'application/x-www-form-urlencoded':
-            length = int(self.headers.getheader('content-length'))
+            length = int(self.headers.get('content-length', "0"))
             postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
         else:
             postvars = {}
         if postvars:
-            print "\nGot some payload:"
+            print("\nGot some payload:")
             for k in postvars:
-                print "%s: %s" % (k, postvars[k])
+                print("%s: %s" % (k, postvars[k]))
 
     def do_GET(self):
         pass
@@ -272,15 +270,15 @@ if __name__ == '__main__':
         if args["port"]:
             port = args["port"]
         httpd = HTTPServer(tuple([iface, port]), SillyHandler)
-        print "Starting..."
+        print("Starting...")
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print "\n"
-        print "-"*80
-        print "Bye!"
+        print("\n")
+        print("-"*80)
+        print("Bye!")
     except Exception:
-        print "\n\n"
+        print("\n\n")
         traceback.print_exc(file=sys.stdout)
-        print "\n\nOH SHI..."
+        print("\n\nOH SHI...")
 
 
